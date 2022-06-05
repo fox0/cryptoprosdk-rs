@@ -1,0 +1,10 @@
+[package]
+name = "cryptoprosdk-rs"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+
+[build-dependencies]
+bindgen = "0.59.2"
