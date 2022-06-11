@@ -2,18 +2,20 @@
 #[allow(non_snake_case)]
 #[allow(non_camel_case_types)]
 #[allow(non_upper_case_globals)]
+#[allow(clippy::upper_case_acronyms)]
 // #[allow(improper_ctypes)]
 mod cprocsp;
+mod ffi;
 
 use std::mem::{size_of, MaybeUninit};
 use std::os::raw::{c_int, c_uchar, c_uint};
-use std::ptr::null;
 
 use crate::cprocsp::{
     szOID_CP_GOST_R3411, CadesSignMessage, PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
     _CADES_SIGN_MESSAGE_PARA, _CADES_SIGN_PARA, _CERT_CONTEXT, _CRYPTOAPI_BLOB,
     _CRYPT_ALGORITHM_IDENTIFIER, _CRYPT_SIGN_MESSAGE_PARA,
 };
+use crate::ffi::MaybeNull;
 
 struct CryptoBlob(_CRYPTOAPI_BLOB);
 
@@ -35,10 +37,7 @@ fn sign(
     let mut arg = _CADES_SIGN_MESSAGE_PARA {
         dwSize: size_of::<_CADES_SIGN_MESSAGE_PARA>() as u32,
         pSignMessagePara: &mut sign_message_para,
-        pCadesSignPara: match cades_sign_para {
-            None => null::<_CADES_SIGN_PARA>() as *mut _CADES_SIGN_PARA,
-            Some(mut v) => &mut v,
-        },
+        pCadesSignPara: cades_sign_para.as_mut_ptr(),
     };
     let detached = 1 as c_int; //true
     let mut mess = message.as_ptr() as *const c_uchar;
