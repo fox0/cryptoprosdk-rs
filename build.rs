@@ -1,8 +1,9 @@
 #[cfg(all(target_family = "unix", target_pointer_width = "64"))]
 fn main() {
     // println!("cargo:include=/opt/cprocsp/include/cpcsp");
-    println!("cargo:rustc-link-search=/opt/cprocsp/lib/amd64/");
-    println!("cargo:rustc-link-lib=cades");
+    println!("cargo:rustc-link-search=/opt/cprocsp/lib/amd64");
+    println!("cargo:rustc-link-lib=dylib=cades");
+    println!("cargo:rustc-link-lib=dylib=capi20");
     println!("cargo:rerun-if-changed=src/arch/unix64.h");
 
     bindgen::Builder::default()
