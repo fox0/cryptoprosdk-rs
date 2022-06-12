@@ -4,6 +4,7 @@ mod cert;
 #[allow(non_camel_case_types)]
 #[allow(non_upper_case_globals)]
 #[allow(clippy::upper_case_acronyms)]
+#[allow(deref_nullptr)]
 #[allow(improper_ctypes)]
 mod cprocsp;
 mod ffi;
