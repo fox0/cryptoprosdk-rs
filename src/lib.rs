@@ -13,42 +13,7 @@ mod ffi;
 
 pub use crate::cert::CertStore;
 
-use crate::cprocsp::CertFindCertificateInStore;
 // use crate::ffi::MaybeNull;
-
-pub fn get_cert_by_subject<T>(store: &CertStore, subject: T) -> Result<(), String>
-where
-    T: Into<String>,
-{
-    unsafe {
-        // let a = CertFindCertificateInStore(store.cert_store);
-
-        Ok(())
-    }
-
-    /*
-
-
-        HCERTSTORE hStoreHandle;
-        PCCERT_CONTEXT pCertContext = NULL;
-
-        hStoreHandle = CertOpenSystemStore(0, storeName);
-        pCertContext = CertFindCertificateInStore(hStoreHandle, MY_ENCODING_TYPE, 0, CERT_FIND_SUBJECT_STR, subject, NULL);
-
-        if (!pCertContext) {
-            PyErr_SetString(CertDoesNotExist, "Could not find the desired certificate.");
-            return NULL;
-        }
-
-        PyObject * certInfo = GetCertInfo(pCertContext);
-
-        CertFreeCertificateContext(pCertContext);
-        CertCloseStore(hStoreHandle, CERT_CLOSE_STORE_CHECK_FLAG);
-
-        return certInfo;
-    }
-         */
-}
 
 // struct CryptoBlob(_CRYPTOAPI_BLOB);
 //
