@@ -2,7 +2,7 @@
 fn main() {
     // println!("cargo:include=/opt/cprocsp/include/cpcsp");
     println!("cargo:rustc-link-search=/opt/cprocsp/lib/amd64");
-    println!("cargo:rustc-link-lib=dylib=cades");
+    // println!("cargo:rustc-link-lib=dylib=cades");
     println!("cargo:rustc-link-lib=dylib=capi20");
     println!("cargo:rerun-if-changed=src/arch/unix64.h");
 

@@ -12,7 +12,7 @@ impl<T> MaybeNull for Option<T> {
     fn as_mut_ptr(self) -> *mut Self::Item {
         match self {
             Some(mut v) => &mut v,
-            None => std::ptr::null::<T>() as *mut T,
+            None => std::ptr::null_mut::<T>(),
         }
     }
 }

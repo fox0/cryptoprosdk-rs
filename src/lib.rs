@@ -1,27 +1,27 @@
+mod cert;
 #[allow(unused)]
 #[allow(non_snake_case)]
 #[allow(non_camel_case_types)]
 #[allow(non_upper_case_globals)]
 #[allow(clippy::upper_case_acronyms)]
-// #[allow(improper_ctypes)]
+#[allow(improper_ctypes)]
 mod cprocsp;
 mod ffi;
 
 // use std::mem::{size_of, MaybeUninit};
 // use std::os::raw::{c_int, c_uchar, c_uint};
 
-use crate::cprocsp::{wchar_t, CertOpenSystemStoreW, HCERTSTORE};
+pub use crate::cert::CertStore;
+
+use crate::cprocsp::CertFindCertificateInStore;
 // use crate::ffi::MaybeNull;
 
-pub fn get_cert_by_subject<T>(store: T, subject: T) -> Result<(), &'static str>
+pub fn get_cert_by_subject<T>(store: &CertStore, subject: T) -> Result<(), String>
 where
     T: Into<String>,
 {
-    let subject_name = store.into().as_ptr() as *const wchar_t;
     unsafe {
-        let s: HCERTSTORE = CertOpenSystemStoreW(0, subject_name);
-        //if null //last error?
-        dbg!(s);
+        // let a = CertFindCertificateInStore(store.cert_store);
 
         Ok(())
     }
