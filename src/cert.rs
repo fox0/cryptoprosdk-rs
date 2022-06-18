@@ -1,174 +1,157 @@
 use std::ffi::CString;
-use std::os::raw::{c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_void};
 
-use crate::cprocsp::{
-    CertCloseStore, CertFindCertificateInStore, CertOpenSystemStoreA, CryptStringToBinaryA,
-    CERT_FIND_HASH, CERT_NAME_STR_CRLF_FLAG, CERT_X500_NAME_STR, CRYPT_STRING_HEX, HCERTSTORE,
-    PKCS_7_ASN_ENCODING, X509_ASN_ENCODING, _CRYPTOAPI_BLOB,
-};
-
-type PARA = _CRYPTOAPI_BLOB;
-
-impl From<Vec<u8>> for PARA {
-    fn from(mut value: Vec<u8>) -> Self {
-        Self {
-            cbData: value.len() as c_uint,
-            pbData: value.as_mut_ptr(),
-        }
-    }
+#[link(name = "wrap")]
+extern "C" {
+    fn open_store(store_name: *const c_char) -> *mut c_void;
+    fn close_store(store: *mut c_void) -> c_int;
+    fn find_certificate_by_thumbprint(store: *mut c_void, thumbprint: *const c_char)
+        -> *mut c_void;
 }
 
-// https://cpdn.cryptopro.ru/content/capilite/html/group___store_func.html
+pub struct CertContext {
+    inner: *mut c_void,
+}
+
+/// Хранилище сертификатов
 pub struct CertStore {
-    cert_store: HCERTSTORE,
+    inner: *mut c_void,
 }
 
 impl CertStore {
-    pub fn try_new<T: Into<String>>(store: T) -> Result<Self, ()> {
-        let store = store.into();
-        let store = CString::new(store).unwrap();
-        let store = store.as_ptr(); // as *const wchar_t;
+    pub fn try_new<T: Into<String>>(store_name: T) -> Option<Self> {
+        let store_name = store_name.into();
+        //переменная должна жить достаточно долго
+        let store_name = CString::new(store_name).unwrap();
 
-        let cert_store = unsafe { CertOpenSystemStoreA(0, store) };
-        if cert_store.is_null() {
-            // let error_number = GetLastError();
-            return Err(());
+        let inner = unsafe { open_store(store_name.as_ptr()) };
+        if inner.is_null() {
+            None
+        } else {
+            Some(Self { inner })
         }
-        Ok(Self { cert_store })
     }
 
-    pub fn find_certificate_by_subject<T: Into<String>>(&self, subject: T) -> Result<(), ()> {
-        let subject = subject.into();
-        let subject = CString::new(subject).unwrap();
-        let subject = subject.as_ptr() as *const c_void;
+    pub fn find_certificate<T: Into<String>>(&self, thumbprint: T) -> Option<CertContext> {
+        let thumbprint = thumbprint.into();
+        let thumbprint = CString::new(thumbprint).unwrap();
 
-        let cert_context = unsafe {
-            CertFindCertificateInStore(
-                self.cert_store,
-                PKCS_7_ASN_ENCODING | X509_ASN_ENCODING,
-                0,
-                CERT_X500_NAME_STR | CERT_NAME_STR_CRLF_FLAG,
-                subject,
-                std::ptr::null(),
-            )
-        };
-        if cert_context.is_null() {
-            return Err(());
+        let inner = unsafe { find_certificate_by_thumbprint(self.inner, thumbprint.as_ptr()) };
+        if inner.is_null() {
+            None
+        } else {
+            Some(CertContext { inner })
         }
-        todo!()
-    }
-
-    pub fn find_certificate_by_thumbprint<T: Into<String>>(&self, thumbprint: T) -> Result<(), ()> {
-        let hash = unsafe { get_hash_from_hex(thumbprint)? };
-        let mut para: PARA = hash.into();
-        let para = &mut para as *mut _ as *const c_void;
-
-        let cert_context = unsafe {
-            CertFindCertificateInStore(
-                self.cert_store,
-                PKCS_7_ASN_ENCODING | X509_ASN_ENCODING,
-                0,
-                CERT_FIND_HASH,
-                para,
-                std::ptr::null(),
-            )
-        };
-        if cert_context.is_null() {
-            return Err(());
-        }
-        todo!()
     }
 }
 
 impl Drop for CertStore {
     fn drop(&mut self) {
-        let _r = unsafe { CertCloseStore(self.cert_store, 0) };
+        let _r = unsafe { close_store(self.inner) };
     }
 }
 
-/// ```
-/// let r = unsafe { get_hash_from_hex("046255290b0eb1cdd1797d9ab8c81f699e3687f3").unwrap() };
-/// assert_eq!(r, [4, 98, 85, 41, 11, 14, 177, 205, 209, 121, 125, 154, 184, 200, 31, 105, 158, 54, 135, 243]);
-/// ```
-unsafe fn get_hash_from_hex<T: Into<String>>(thumbprint: T) -> Result<Vec<u8>, ()> {
-    let thumbprint = thumbprint.into();
-    let thumbprint_len = thumbprint.len() as c_uint;
-    let thumbprint = CString::new(thumbprint).unwrap();
-    let thumbprint = thumbprint.as_ptr();
-
-    let mut result_len: c_uint = 20;
-    let mut result: Vec<u8> = Vec::with_capacity(result_len as usize);
-    result.set_len(result_len as usize);
-
-    let r = CryptStringToBinaryA(
-        thumbprint,
-        thumbprint_len,
-        CRYPT_STRING_HEX,
-        result.as_mut_ptr(),
-        &mut result_len,
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-    );
-    if r == 0 || result_len == 0 {
-        return Err(());
-    }
-
-    result.set_len(result_len as usize);
-    Ok(result)
-}
+// // https://docs.cryptopro.ru/cades/reference/cadesc/cadesc-samples/samplesimplifiedapisign
+// fn sign(
+//     sign_message_para: _CRYPT_SIGN_MESSAGE_PARA,
+//     cades_sign_para: Option<_CADES_SIGN_PARA>,
+//     message: String,
+// ) -> Result<Vec<u8>, ()> {
+//     let mut sign_message_para = sign_message_para;
+//     // Структура, задаваемая в качестве параметра функции CadesSignMessage.
+//     let mut arg = _CADES_SIGN_MESSAGE_PARA {
+//         dwSize: size_of::<_CADES_SIGN_MESSAGE_PARA>() as u32,
+//         pSignMessagePara: &mut sign_message_para,
+//         pCadesSignPara: cades_sign_para.as_mut_ptr(),
+//     };
+//     let detached = 1 as c_int; //true
+//     let mut mess = message.as_ptr() as *const c_uchar;
+//     let mut mess_len = message.len() as c_uint;
+//     let mut signed_blob: MaybeUninit<CryptoBlob> = MaybeUninit::zeroed();
+//     let mut s = signed_blob.as_mut_ptr() as *mut _CRYPTOAPI_BLOB;
+//     let r = unsafe { CadesSignMessage(&mut arg, detached, 1, &mut mess, &mut mess_len, &mut s) };
+//     if r != 0 {
+//         return Err(());
+//     }
+//
+//     // SAFETY: is initialized
+//     let _signed_blob = unsafe { signed_blob.assume_init() };
+//
+//     let result: Vec<u8> = vec![];
+//     //todo copy
+//     Ok(result)
+// }
+//
+// // fn main() {
+// // let p = _CADES_SIGN_PARA {
+// //     dwSize: (),
+// //     dwCadesType: (),
+// //     pSignerCert: (),
+// //     szHashAlgorithm: (),
+// //     hAdditionalStore: (),
+// //     pTspConnectionPara: (),
+// //     pProxyPara: (),
+// //     pCadesExtraPara: ()
+// // }
+// //
+// // let mut p_context = _CERT_CONTEXT {
+// //     dwCertEncodingType: (),
+// //     pbCertEncoded: (),
+// //     cbCertEncoded: (),
+// //     pCertInfo: (),
+// //     hCertStore: (),
+// // };
+// //
+// // // https://docs.microsoft.com/en-us/windows/win32/api/wincrypt/ns-wincrypt-crypt_sign_message_para
+// // let sign_message_para = _CRYPT_SIGN_MESSAGE_PARA {
+// //     cbSize: size_of::<_CRYPT_SIGN_MESSAGE_PARA>(),
+// //     dwMsgEncodingType: X509_ASN_ENCODING | PKCS_7_ASN_ENCODING,
+// //     pSigningCert: &mut p_context,
+// //     HashAlgorithm: _CRYPT_ALGORITHM_IDENTIFIER {
+// //         pszObjId: szOID_CP_GOST_R3411 as *mut c_char,
+// //         // Parameters: null::<_CRYPTOAPI_BLOB>(),
+// //         Parameters: _CRYPTOAPI_BLOB { cbData: (), pbData: () }
+// //     },
+// //     pvHashAuxInfo: (),
+// //     cMsgCert: (),
+// //     rgpMsgCert: (),
+// //     cMsgCrl: (),
+// //     rgpMsgCrl: (),
+// //     cAuthAttr: (),
+// //     rgAuthAttr: (),
+// //     cUnauthAttr: (),
+// //     rgUnauthAttr: (),
+// //     dwFlags: (),
+// //     dwInnerContentType: (),
+// // };
+// //
+// // let result = sign(sign_message_para, None, "Trixie is Best Pony!".to_string()).unwrap();
+// // dbg!(result);
+// // }
 
 #[cfg(test)]
 mod tests {
-    use crate::cert::get_hash_from_hex;
-    use crate::CertStore;
-
-    fn get_cert_store_my() -> CertStore {
-        CertStore::try_new("My").unwrap()
-    }
+    use crate::cert::CertStore;
 
     #[test]
     fn test_cert_store_open_my() {
-        let _ = get_cert_store_my();
+        let _ = CertStore::try_new("MY").unwrap();
     }
 
-    // /opt/cprocsp/bin/amd64/certmgr -inst -store MY -f tests/certs/
-    #[test]
-    #[ignore]
-    fn test_get_cert_by_subject() {
-        let store = get_cert_store_my();
-        store.find_certificate_by_subject("E=support@cryptopro.ru, C=RU, L=Moscow, O=CRYPTO-PRO LLC, CN=CRYPTO-PRO Test Center 2").unwrap();
-    }
-
+    // /opt/cprocsp/bin/amd64/certmgr certmgr --list --thumbprint 046255290b0eb1cdd1797d9ab8c81f699e3687f3
     #[test]
     fn test_get_cert_by_thumbprint() {
-        let store = get_cert_store_my();
-        store
-            .find_certificate_by_thumbprint("046255290b0eb1cdd1797d9ab8c81f699e3687f3")
+        CertStore::try_new("MY")
+            .unwrap()
+            .find_certificate("046255290b0eb1cdd1797d9ab8c81f699e3687f3")
             .unwrap();
     }
 
     #[test]
     fn test_get_cert_by_thumbprint2() {
-        let store = get_cert_store_my();
-        store
-            .find_certificate_by_thumbprint("8cae88bbfd404a7a53630864f9033606e1dc45e2")
+        CertStore::try_new("MY")
+            .unwrap()
+            .find_certificate("8cae88bbfd404a7a53630864f9033606e1dc45e2")
             .unwrap();
-    }
-
-    #[test]
-    fn test_get_hash_from_hex() {
-        let r = unsafe { get_hash_from_hex("046255290b0eb1cdd1797d9ab8c81f699e3687f3").unwrap() };
-        let lst = [
-            4, 98, 85, 41, 11, 14, 177, 205, 209, 121, 125, 154, 184, 200, 31, 105, 158, 54, 135,
-            243,
-        ];
-        assert_eq!(r.len(), 20);
-        assert_eq!(r, lst)
-    }
-
-    #[test]
-    fn test_get_hash_from_hex2() {
-        let r = unsafe { get_hash_from_hex("0x046255290b0eb1cdd1797d9ab8c81f699e3687f3") };
-        assert!(r.is_err());
     }
 }
