@@ -1,2 +1,2 @@
 [build]
-rustflags = "-L /opt/cprocsp/lib/amd64 -lcapi20"
+rustflags = "-L /opt/cprocsp/lib/amd64 -lcapi20 -lcades -lrdrsup"

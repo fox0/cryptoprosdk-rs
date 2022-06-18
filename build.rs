@@ -8,7 +8,7 @@ fn main() {
         .define("SIZEOF_VOID_P", Some("8"))
         // .include("/opt/cprocsp/include")
         .include("/opt/cprocsp/include/cpcsp")
-        // .include("/opt/cprocsp/include/pki")
+        .include("/opt/cprocsp/include/pki")
         .file("src/wrap.c")
         .compile("wrap");
 
