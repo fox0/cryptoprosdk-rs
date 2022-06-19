@@ -1,14 +1,15 @@
 use std::ffi::CString;
 use std::fmt::{Debug, Formatter};
-use std::os::raw::{c_char, c_int, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_uchar, c_uint, c_void};
 
+#[allow(dead_code)]
 #[link(name = "wrap")]
 extern "C" {
     fn get_last_error() -> c_uint;
-    fn open_store(store_name: *const c_char) -> *mut c_void;
-    fn close_store(store: *mut c_void) -> c_int;
-    fn find_certificate_by_thumbprint(store: *mut c_void, thumbprint: *const c_char)
-        -> *mut c_void;
+    fn open_store(s: *const c_char) -> *mut c_void;
+    fn close_store(s: *mut c_void) -> c_int;
+    fn find_certificate_by_thumbprint(s: *mut c_void, t: *const c_char) -> *mut c_void;
+    fn sign(c: *mut c_void, d: *const c_uchar, dl: c_uint, r: *mut c_uchar, rl: *mut c_uint);
 }
 
 pub struct ErrorCode {
@@ -30,9 +31,21 @@ impl Debug for ErrorCode {
 }
 
 #[derive(Debug)]
-pub struct CertContext {
+pub struct Cert {
     inner: *mut c_void,
 }
+
+// impl Cert {
+//     pub fn sign(&self, data: Vec<u8>) -> Vec<u8> {
+//         let mut result_len: c_uint = 20;
+//         let mut result: Vec<u8> = Vec::with_capacity(result_len as usize);
+//         result.set_len(result_len as usize);
+//
+//         c_func(result.as_mut_ptr(), &mut result_len);
+//         result.set_len(result_len as usize);
+//         result
+//     }
+// }
 
 /// Хранилище сертификатов
 #[derive(Debug)]
@@ -54,10 +67,7 @@ impl CertStore {
         }
     }
 
-    pub fn find_certificate<T: Into<String>>(
-        &self,
-        thumbprint: T,
-    ) -> Result<CertContext, ErrorCode> {
+    pub fn find<T: Into<String>>(&self, thumbprint: T) -> Result<Cert, ErrorCode> {
         let thumbprint = thumbprint.into();
         let thumbprint = CString::new(thumbprint).unwrap();
 
@@ -65,7 +75,7 @@ impl CertStore {
         if inner.is_null() {
             Err(ErrorCode::new())
         } else {
-            Ok(CertContext { inner })
+            Ok(Cert { inner })
         }
     }
 }
@@ -90,7 +100,7 @@ mod tests {
     fn test_get_cert_by_thumbprint() {
         CertStore::try_new("MY")
             .unwrap()
-            .find_certificate("046255290b0eb1cdd1797d9ab8c81f699e3687f3")
+            .find("046255290b0eb1cdd1797d9ab8c81f699e3687f3")
             .unwrap();
     }
 
@@ -98,7 +108,7 @@ mod tests {
     fn test_get_cert_by_thumbprint2() {
         CertStore::try_new("MY")
             .unwrap()
-            .find_certificate("8cae88bbfd404a7a53630864f9033606e1dc45e2")
+            .find("8cae88bbfd404a7a53630864f9033606e1dc45e2")
             .unwrap();
     }
 
@@ -106,7 +116,7 @@ mod tests {
     fn test_get_cert_by_thumbprint3() {
         let r = CertStore::try_new("MY")
             .unwrap()
-            .find_certificate("0cae88bbfd404a7a53630864f9033606e1dc45e2");
+            .find("0cae88bbfd404a7a53630864f9033606e1dc45e2");
         dbg!(&r);
         assert!(r.is_err());
     }

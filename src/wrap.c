@@ -1,95 +1,104 @@
-#include <stdarg.h>
-#include <stdio.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
 #include <WinCryptEx.h>
 #include <cades.h>
 
 #define CERT_ENCODING_TYPE PKCS_7_ASN_ENCODING | X509_ASN_ENCODING
 #define CERT_HASH_ALGORITHM szOID_CP_GOST_R3411
 
+#define PRINT_LAST_ERROR printf("[src/wrap.c:%d] error 0x%x\n", __LINE__, GetLastError())
+
+
 unsigned int get_last_error() {
     return GetLastError();
 }
 
-void *open_store(const char *store_name) {
-    if (strlen(store_name) == 0) {
+void *open_store(const char *pszSubsystemProtocol) {
+    if (strlen(pszSubsystemProtocol) == 0) {
         return NULL;
     }
-    return CertOpenSystemStoreA(0, store_name);
+    HCRYPTPROV hProv = 0;
+    HCERTSTORE r = CertOpenSystemStoreA(hProv, pszSubsystemProtocol);
+    if (!r) {
+        PRINT_LAST_ERROR;
+    }
+    return r;
 }
 
-int close_store(void *store) {
-    if (!store) {
+int close_store(void *hCertStore) {
+    if (!hCertStore) {
         return 0;
     }
-    return CertCloseStore(store, 0);
+    const DWORD dwFlags = 0;
+    return CertCloseStore(hCertStore, dwFlags);
 }
 
-void *find_certificate_by_thumbprint(void *store, const char *thumbprint) {
-    if (!store || strlen(thumbprint) != 40) {
+void *find_certificate_by_thumbprint(void *hCertStore, const char *pszString) {
+    const DWORD cchString = strlen(pszString);
+    if (!hCertStore || cchString != 40) {
         return NULL;
     }
-
-    unsigned int hash_len = 20;
-    unsigned char hash[hash_len];
-    if (!CryptStringToBinaryA(
-            thumbprint,
-            strlen(thumbprint),
-            CRYPT_STRING_HEX,
-            hash,
-            &hash_len,
-            NULL,
-            NULL
-    )) {
+    const DWORD dwFlags = CRYPT_STRING_HEX;
+    DWORD hashLen = 20;
+    unsigned char pbBinary[hashLen];
+    if (!CryptStringToBinaryA(pszString, cchString, dwFlags, pbBinary/*out*/, &hashLen/*out*/, NULL, NULL)) {
+        PRINT_LAST_ERROR;
         return NULL;
     }
-
-    DATA_BLOB para = {.cbData = hash_len, .pbData = hash};
-    PCCERT_CONTEXT result = CertFindCertificateInStore(
-            store,
-            CERT_ENCODING_TYPE,
-            0,
-            CERT_FIND_HASH,
-            &para,
-            NULL
-    );
-    return (void *) result;
+    const DWORD dwCertEncodingType = CERT_ENCODING_TYPE;
+    const DWORD dwFindFlags = 0;
+    const DWORD dwFindType = CERT_FIND_HASH;
+    DATA_BLOB p = {
+            .cbData = hashLen,
+            .pbData = pbBinary
+    };
+    PCCERT_CONTEXT r = CertFindCertificateInStore(hCertStore, dwCertEncodingType, dwFindFlags, dwFindType, &p, NULL);
+    if (!r) {
+        PRINT_LAST_ERROR;
+    }
+    return (void *) r;
 }
 
-void sign(void *cert_context, const unsigned char *data) {
-    CRYPT_SIGN_MESSAGE_PARA signPara = {sizeof(signPara)};
-    signPara.dwMsgEncodingType = CERT_ENCODING_TYPE;
-    signPara.pSigningCert = (PCCERT_CONTEXT) cert_context;
-    signPara.HashAlgorithm.pszObjId = CERT_HASH_ALGORITHM;
-
-    CADES_SIGN_MESSAGE_PARA para = {sizeof(para)};
-    para.pSignMessagePara = &signPara;
-
-    const BYTE *pbToBeSigned[] = {&data[0]};
-    DWORD cbToBeSigned[] = {strlen((const char *) data)};
-
-    PCRYPT_DATA_BLOB pSignedMessage = 0;
-    if (!CadesSignMessage(
-            &para,
-            TRUE, // detached
-            1,
-            pbToBeSigned,
-            cbToBeSigned,
-            &pSignedMessage
-    )) {
-        //printf("error 0x%x\n", GetLastError());
+void sign(
+        __in void *pSigningCert,
+        __in const unsigned char *data,
+        __in const unsigned int dataLen,
+        __out unsigned char *result,
+        __out unsigned int *resultLen
+) {
+    if (!pSigningCert || !data || dataLen == 0) {
+        return;
+    }
+    CRYPT_SIGN_MESSAGE_PARA p2 = {
+            .cbSize = sizeof(p2),
+            .dwMsgEncodingType = CERT_ENCODING_TYPE,
+            .pSigningCert = (PCCERT_CONTEXT) pSigningCert,
+            .HashAlgorithm.pszObjId = CERT_HASH_ALGORITHM
+    };
+    CADES_SIGN_MESSAGE_PARA p = {
+            .dwSize = sizeof(p),
+            .pSignMessagePara = &p2
+    };
+    const BOOL fDetachedSignature = TRUE;
+    const DWORD cToBeSigned = 1;
+    const BYTE *rgpbToBeSigned[] = {&data[0]};
+    DWORD rgcbToBeSigned[] = {dataLen};
+    DATA_BLOB *r = 0;
+    if (!CadesSignMessage(&p, fDetachedSignature, cToBeSigned, rgpbToBeSigned, rgcbToBeSigned, &r/*out*/)) {
+        PRINT_LAST_ERROR;
         return;
     }
 
-    for (size_t i = 0; i < pSignedMessage->cbData; i++) {
-        printf("%d ", pSignedMessage->pbData[i]);
+    for (size_t i = 0; i < r->cbData; i++) {
+        printf("%d ", r->pbData[i]);
     }
 
-//    std::vector < BYTE > message(pSignedMessage->cbData);
-//    std::copy(pSignedMessage->pbData,
-//              pSignedMessage->pbData + pSignedMessage->cbData, message.begin());
+//    std::vector < BYTE > message(r->cbData);
+//    std::copy(r->pbData,
+//              r->pbData + r->cbData, message.begin());
 //
-//    if (!CadesFreeBlob(pSignedMessage)) {
+//    if (!CadesFreeBlob(r)) {
 //        std::cout << "CadesFreeBlob() failed" << std::endl;
 //        return empty;
 //    }
