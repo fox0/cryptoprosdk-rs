@@ -11,18 +11,6 @@ fn main() {
         .include("/opt/cprocsp/include/pki")
         .file("src/wrap.c")
         .compile("wrap");
-
-    // bindgen::Builder::default()
-    //     .clang_args(&[
-    //         "-I/opt/cprocsp/include",
-    //         "-I/opt/cprocsp/include/cpcsp",
-    //         "-I/opt/cprocsp/include/pki",
-    //     ])
-    //     .header("src/arch/unix64.h")
-    //     .generate()
-    //     .expect("Unable to generate bindings")
-    //     .write_to_file("src/cprocsp.rs")
-    //     .expect("Couldn't write bindings!");
 }
 
 #[cfg(not(all(target_family = "unix", target_pointer_width = "64")))]
