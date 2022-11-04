@@ -46,56 +46,57 @@ impl Debug for ErrorCode {
     }
 }
 
+macro_rules! try_new {
+    ($t:ident, $value:ident) => {
+        if !$value.is_null() {
+            Ok($t($value))
+        } else {
+            Err(ErrorCode::new())
+        }
+    };
+}
+
+macro_rules! print_error {
+    ($value:ident) => {
+        if $value == 0 {
+            eprintln!("{:?}", ErrorCode::new());
+        }
+    };
+}
+
 impl CertStore {
-    pub fn new<T: Into<String>>(store_name: T) -> Result<Self, ErrorCode> {
+    pub fn new<T>(store_name: T) -> Result<Self, ErrorCode>
+    where
+        T: Into<String>,
+    {
         let store_name = store_name.into();
         //переменная должна жить достаточно долго
         let store_name = CString::new(store_name).unwrap();
         let r = unsafe { CertOpenSystemStoreA(0, store_name.as_ptr()) };
-        Self::try_new(r)
+        try_new!(Self, r)
     }
 
-    fn try_new(value: *mut c_void) -> Result<Self, ErrorCode> {
-        if value.is_null() {
-            Err(ErrorCode::new())
-        } else {
-            Ok(Self(value))
-        }
-    }
-
-    pub fn find<T: Into<String>>(&self, thumbprint: T) -> Result<CertContext, ErrorCode> {
+    pub fn find<T>(&self, thumbprint: T) -> Result<CertContext, ErrorCode>
+    where
+        T: Into<String>,
+    {
         let thumbprint = thumbprint.into();
         let thumbprint = CString::new(thumbprint).unwrap();
         let r = unsafe { wrapFindCertificateByThumbprint(self.0, thumbprint.as_ptr()) };
-        CertContext::try_new(r)
+        try_new!(CertContext, r)
     }
 }
 
 impl CertContext {
-    fn try_new(value: *mut c_void) -> Result<Self, ErrorCode> {
-        if value.is_null() {
-            Err(ErrorCode::new())
-        } else {
-            Ok(Self(value))
-        }
-    }
-
     /// Подписать сообщение отсоединённой подписью
-    pub fn sign<T: Into<Vec<u8>>>(&self, data: T) -> Result<Vec<u8>, ErrorCode> {
+    pub fn sign<T>(&self, data: T) -> Result<Vec<u8>, ErrorCode>
+    where
+        T: Into<Vec<u8>>,
+    {
         let data = data.into();
         let r = unsafe { wrapSign(self.0, data.as_ptr(), data.len() as c_uint) };
-        let blob = Blob::try_new(r)?;
+        let blob = try_new!(Blob, r)?;
         Ok(blob.into())
-    }
-}
-
-impl Blob {
-    fn try_new(value: *mut DataBlob) -> Result<Self, ErrorCode> {
-        if value.is_null() {
-            Err(ErrorCode::new())
-        } else {
-            Ok(Self(value))
-        }
     }
 }
 
@@ -127,9 +128,7 @@ impl Drop for CertStore {
     fn drop(&mut self) {
         // SAFETY: not null
         let r = unsafe { CertCloseStore(self.0, 0) };
-        if r == 0 {
-            eprintln!("{:?}", ErrorCode::new());
-        }
+        print_error!(r);
     }
 }
 
@@ -137,9 +136,7 @@ impl Drop for CertContext {
     fn drop(&mut self) {
         // SAFETY: not null
         let r = unsafe { CertFreeCertificateContext(self.0) };
-        if r == 0 {
-            eprintln!("{:?}", ErrorCode::new());
-        }
+        print_error!(r);
     }
 }
 
@@ -147,9 +144,7 @@ impl Drop for Blob {
     fn drop(&mut self) {
         // SAFETY: not null
         let r = unsafe { CadesFreeBlob(self.0) };
-        if r == 0 {
-            eprintln!("{:?}", ErrorCode::new());
-        }
+        print_error!(r);
     }
 }
 
