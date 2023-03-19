@@ -6,10 +6,12 @@ pub struct ErrorCode(c_uint);
 
 /// Хранилище сертификатов
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct CertStore(*mut c_void);
 
 /// Контекст сертификата
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct CertContext(*mut c_void);
 
 // bindgen /opt/cprocsp/include/cpcsp/CSP_WinCrypt.h
@@ -21,6 +23,7 @@ struct DataBlob {
 }
 
 #[derive(Debug)]
+#[repr(transparent)]
 struct Blob(*mut DataBlob);
 
 #[link(name = "wrap")]
